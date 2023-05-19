@@ -9,15 +9,26 @@ function App() {
     provider: null,
     web3: null,
     contract: null,
+    isProviderLoaded: false,
   });
   const [account, setAccount] = useState(null);
   const [balance, setBalance] = useState(null);
   const [shouldReload, reload] = useState(false);
 
+  const canConnectToContract = account && web3Api.contract;
   const reloadEffect = useCallback(() => reload(!shouldReload), [shouldReload]);
 
   const setAccountListener = (provider) => {
-    provider.on("accountsChanged", (accounts) => setAccount(accounts[0]));
+    // provider.on("accountsChanged", (accounts) => setAccount(accounts[0]));
+    provider.on("accountsChanged", (_) => window.location.reload());
+    provider.on("chainChanged", (_) => window.location.reload());
+    // provider._jsonRpcConnection.events.on("notification", payload => {
+    //   const { method } = payload
+
+    //   if (method === "metamask_unlockStateChanged") {
+    //     setAccount(null)
+    //   }
+    // })
   };
 
   useEffect(() => {
@@ -29,16 +40,18 @@ function App() {
 
       // debugger;
       const provider = await detectEthereumProvider();
-      const contract = await loadContract("Faucet", provider);
 
       if (provider) {
+        const contract = await loadContract("Faucet", provider);
         setAccountListener(provider);
         setWeb3Api({
           web3: new Web3(provider),
           provider,
           contract,
+          isProviderLoaded: true,
         });
       } else {
+        setWeb3Api((web3Api) => ({ ...web3Api, isProviderLoaded: true }));
         console.error("Please, install Metamask.");
       }
     };
@@ -89,30 +102,58 @@ function App() {
     <>
       <div className="faucet-wrapper">
         <div className="faucet">
-          <div className="is-flex is-align-items-center">
-            <span>
-              <strong className="mr-2">Account: </strong>
-            </span>
-            {account ? (
-              <div>{account}</div>
-            ) : (
-              <button
-                className="button is-small"
-                onClick={() =>
-                  web3Api.provider.request({ method: "eth_requestAccounts" })
-                }
-              >
-                Connect Wallet
-              </button>
-            )}
-          </div>
+          {web3Api.isProviderLoaded ? (
+            <div className="is-flex is-align-items-center">
+              <span>
+                <strong className="mr-2">Account: </strong>
+              </span>
+              {account ? (
+                <div>{account}</div>
+              ) : !web3Api.provider ? (
+                <>
+                  <div className="notification is-warning is-size-6 is-rounded">
+                    Wallet is not detected!{` `}
+                    <a
+                      target="_blank"
+                      rel="noreferrer"
+                      href="https://docs.metamask.io"
+                    >
+                      Install Metamask
+                    </a>
+                  </div>
+                </>
+              ) : (
+                <button
+                  className="button is-small"
+                  onClick={() =>
+                    web3Api.provider.request({ method: "eth_requestAccounts" })
+                  }
+                >
+                  Connect Wallet
+                </button>
+              )}
+            </div>
+          ) : (
+            <span>Looking for Web3...</span>
+          )}
           <div className="balance-view is-size-2 my-4">
             Current Balance: <strong>{balance}</strong> ETH
           </div>
-          <button onClick={addFunds} className="button is-link mr-2">
+          {!canConnectToContract && (
+            <i className="is-block">Connect to Ganache</i>
+          )}
+          <button
+            disabled={!canConnectToContract}
+            onClick={addFunds}
+            className="button is-link mr-2"
+          >
             Donate 1 ETH
           </button>
-          <button onClick={withdraw} className="button is-primary">
+          <button
+            disabled={!canConnectToContract}
+            onClick={withdraw}
+            className="button is-primary"
+          >
             Withdraw 0.1 ETH
           </button>
         </div>
